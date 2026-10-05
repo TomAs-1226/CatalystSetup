@@ -43,6 +43,21 @@
           <button class="cat-btn cat-btn--loud" id="go" disabled></button>
         </header>
         <div class="list cat-card" id="appList" role="group" aria-label="Apps"></div>
+
+        <!-- The switch says what the laptop really has: "on" means the scheduled task exists. -->
+        <section class="keep cat-card" aria-labelledby="keepTitle">
+          <label class="keep__main">
+            <input type="checkbox" class="switch" id="keepSwitch" role="switch" aria-labelledby="keepTitle" />
+            <span class="keep__text">
+              <span class="keep__title" id="keepTitle">Keep these apps up to date</span>
+              <span class="keep__line" id="keepLine"></span>
+            </span>
+          </label>
+          <button class="out keep__now" id="keepNow" hidden>Turn on now</button>
+          <p class="keep__rule">Only apps that are already installed, never one that is open, and never while the FRC Driver Station is open.</p>
+          <p class="keep__last" id="keepLast" hidden></p>
+          <p class="keep__note" id="keepNote" hidden></p>
+        </section>
       </section>
 
       <!-- Steps two and three are one list: it installs, then it is the result. -->

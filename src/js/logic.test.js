@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  actionLabel, defaultSelection, finished, formatBytes, formatElapsed, fraction, mergeSelection,
+  actionLabel, defaultSelection, finished, formatBytes, formatElapsed, fraction, keepView, lastRunText, mergeSelection,
   phaseText, reduceProgress, selectable, sourceSentence, sourceText, statusWord, summary, versionsText,
 } from "./logic.js";
 
@@ -151,4 +151,42 @@ test("the summary counts, and a dry run is never called an install", () => {
   assert.equal(summary(ids, dry).title, "Dry run finished, 1 failed");
   assert.equal(summary(["a", "b"], dry).title, "Dry run finished");
   assert.equal(summary(["a", "b"], dry).done, 0);
+});
+
+test("the switch shows what the laptop really has", () => {
+  const on = keepView({ registered: true, preference: true, everyHours: 4 });
+  assert.deepEqual([on.checked, on.pending], [true, false]);
+  assert.match(on.line, /^On\. .*every 4 hours/);
+  // Never asked: set, but honest that nothing is registered yet.
+  const fresh = keepView({ registered: false, preference: null, everyHours: 4 });
+  assert.deepEqual([fresh.checked, fresh.pending], [true, true]);
+  assert.equal(fresh.line, "Not set up yet. It turns on when you press the button above.");
+  assert.equal(keepView({ registered: false, preference: null, everyHours: 4 }, false).line, "Not set up yet. Nothing needs installing, so turn it on here.");
+  const off = keepView({ registered: false, preference: false, everyHours: 4 });
+  assert.deepEqual([off.checked, off.pending], [false, false]);
+  // The task was removed behind its back (Task Scheduler, by hand): it reads as not set up, not as on.
+  assert.equal(keepView({ registered: false, preference: true, everyHours: 4 }).pending, true);
+  // And a task that exists is on, whatever the settings file says.
+  assert.equal(keepView({ registered: true, preference: false, everyHours: 4 }).checked, true);
+  assert.equal(keepView(null).line, "");
+});
+
+test("the last run is told as it went", () => {
+  assert.equal(lastRunText(null), null);
+  assert.equal(lastRunText({ outcome: "checked", updated: [], failed: [], waiting: [] }), "everything installed was up to date");
+  assert.equal(lastRunText({ outcome: "driver-station" }), "the Driver Station was open, so nothing was checked");
+  assert.equal(lastRunText({ outcome: "offline" }), "GitHub could not be reached");
+  assert.match(lastRunText({ outcome: "rate-limited" }), /hourly limit/);
+  const one = { outcome: "checked", updated: [{ name: "Catalyst", from: "2.7.0", to: "2.8.0" }], failed: [], waiting: [] };
+  assert.equal(lastRunText(one), "updated Catalyst to 2.8.0");
+  assert.equal(lastRunText({ ...one, dry: true }), "would have updated Catalyst to 2.8.0");
+  const busy = {
+    outcome: "checked",
+    updated: [{ name: "Catalyst", to: "2.8.0" }, { name: "Catalyst Pit", to: "0.2.0" }],
+    setup: { name: "Catalyst Setup", from: "1.0.0", to: "1.1.0" },
+    waiting: [{ name: "Catalyst Console", message: "is open, so its update waits for the next run." }],
+    failed: [{ name: "Catalyst Pit", message: "The installer failed (exit code 2)." }],
+  };
+  assert.equal(lastRunText(busy),
+    "updated Catalyst to 2.8.0, Catalyst Pit to 0.2.0 and itself to 1.1.0; Catalyst Console is open, so its update waits for the next run; Catalyst Pit failed: The installer failed (exit code 2)");
 });

@@ -32,6 +32,10 @@ const SHOTS = {
   "3-done-failed": "scenario=mixed&run=failed&pick=all",
   "3-done-dry-run": "scenario=mixed&run=dry",
   "1-apps-small-window": ["scenario=fresh", "980,640"],
+  "4-keep-on-updated": ["scenario=mixed&keep=on&last=updated", "1040,860"],
+  "4-keep-on-driver-station": ["scenario=mixed&keep=on&last=ds", "1040,860"],
+  "4-keep-off": ["scenario=mixed&keep=off", "1040,860"],
+  "4-keep-not-set-up-yet": ["scenario=fresh", "1040,860"],
 };
 
 const wanted = process.argv.slice(2);

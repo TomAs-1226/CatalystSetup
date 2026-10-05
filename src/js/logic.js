@@ -110,6 +110,42 @@ export function sourceSentence(payload, online, rows) {
   return "Nothing in the payload folder can be installed.";
 }
 
+// ---------------------------------------------------------------- keep up to date
+
+/**
+ * The switch, from what the laptop really has. "On" means the scheduled task exists; a laptop
+ * that has never been asked shows the switch set, and says plainly that nothing is set up yet.
+ */
+export function keepView(keep, canInstall = true) {
+  if (!keep) return { checked: false, pending: false, line: "" };
+  if (keep.registered) {
+    return { checked: true, pending: false, line: `On. Checks when you sign in, and every ${keep.everyHours} hours after.` };
+  }
+  if (keep.preference === false) {
+    return { checked: false, pending: false, line: "Off. Apps change only when you run this program." };
+  }
+  // With nothing to install there is no button to press, so the line must not point at one.
+  const how = canInstall ? "It turns on when you press the button above." : "Nothing needs installing, so turn it on here.";
+  return { checked: true, pending: true, line: `Not set up yet. ${how}` };
+}
+
+const list = (parts) => (parts.length <= 1 ? parts.join("") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`);
+
+/** What the last background run did, as the end of "Last checked <when>: ...". Null if there was none. */
+export function lastRunText(report) {
+  if (!report) return null;
+  if (report.outcome === "driver-station") return "the Driver Station was open, so nothing was checked";
+  if (report.outcome === "offline") return "GitHub could not be reached";
+  if (report.outcome === "rate-limited") return "GitHub's hourly limit for this network was used up";
+  const verb = report.dry ? "would have updated" : "updated";
+  const parts = [];
+  const changes = [...(report.updated || []), ...(report.setup ? [{ ...report.setup, name: "itself" }] : [])];
+  if (changes.length) parts.push(`${verb} ${list(changes.map((c) => `${c.name} to ${c.to}`))}`);
+  for (const n of report.waiting || []) parts.push(`${n.name} ${n.message.replace(/\.$/, "")}`);
+  for (const n of report.failed || []) parts.push(`${n.name} failed: ${n.message.replace(/\.$/, "")}`);
+  return parts.length ? parts.join("; ") : "everything installed was up to date";
+}
+
 // ---------------------------------------------------------------- the install
 
 /** Fold one progress event into what is known about each app. `now` stamps the phase's start. */

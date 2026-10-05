@@ -6,7 +6,7 @@
 import { stateLayer } from "./motion.js";
 import {
   actionLabel, defaultSelection, finished, fraction, mergeSelection, phaseText, reduceProgress,
-  selectable, sourceSentence, sourceText, statusWord, summary, versionsText,
+  keepView, lastRunText, selectable, sourceSentence, sourceText, statusWord, summary, versionsText,
 } from "./logic.js";
 
 const tauri = window.__TAURI__;
@@ -48,6 +48,7 @@ const state = {
   selected: new Set(),
   touched: new Set(),
   run: null,                   // { ids, progress, complete }
+  keep: null,                  // the switch as the laptop really has it (keep_state)
 };
 
 // ---------------------------------------------------------------- motion
@@ -98,9 +99,17 @@ document.addEventListener("pointerdown", (event) => {
 
 // ---------------------------------------------------------------- step one
 
-function icon(row) {
-  if (row.icon) return el("img", { class: "icon", src: row.icon, alt: "", draggable: "false" });
+function letterTile(row) {
   return el("span", { class: "icon icon--mono", "aria-hidden": "true" }, row.name.replace(/^Catalyst\s+/, "").charAt(0));
+}
+
+function icon(row) {
+  if (!row.icon) return letterTile(row);
+  // An app whose icon has not been drawn yet (it is copied in from the app's own repo) keeps its
+  // letter rather than showing a broken picture.
+  const img = el("img", { class: "icon", src: row.icon, alt: "", draggable: "false" });
+  img.addEventListener("error", () => img.replaceWith(letterTile(row)), { once: true });
+  return img;
 }
 
 function versions(row) {
@@ -139,7 +148,9 @@ function appRow(row) {
     box,
     icon(row),
     el("div", { class: "row__text" },
-      el("div", { class: "row__name" }, row.name, !row.default && el("span", { class: "row__tag" }, "optional")),
+      // "updates by hand": no release to ask about, so the switch below cannot reach it.
+      el("div", { class: "row__name" }, row.name,
+        el("span", { class: "row__tag" }, [!row.default && "optional", !row.downloadable && "updates by hand"].filter(Boolean).join(" · "))),
       el("div", { class: "row__blurb" }, second)),
     versions(row),
     stateCell(row));
@@ -149,6 +160,7 @@ function renderAction() {
   const go = $("#go");
   go.textContent = actionLabel(state.rows, state.selected);
   go.disabled = ![...state.selected].some((id) => state.rows.some((r) => r.id === id && selectable(r)));
+  renderKeep();          // its "not set up yet" line depends on whether there is a button to press
 }
 
 function renderApps() {
@@ -185,6 +197,36 @@ function renderLaptop(items) {
           title: item.url,
           onclick: () => invoke("open_link", { url: item.url }).catch(() => {}),
         }, item.urlLabel, el("span", { html: ICONS.out }))))));
+}
+
+// ---------------------------------------------------------------- keep up to date
+
+function renderKeep() {
+  const view = keepView(state.keep, !$("#go").disabled);
+  const box = $("#keepSwitch");
+  box.checked = view.checked;
+  box.disabled = !state.keep;
+  $("#keepLine").textContent = view.line;
+  $("#keepNow").hidden = !view.pending;
+
+  const last = lastRunText(state.keep?.lastRun);
+  $("#keepLast").hidden = !last;
+  if (last) {
+    const when = new Date(state.keep.lastRun.time * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    $("#keepLast").textContent = `Last checked ${when}: ${last}.`;
+  }
+  $("#keepNote").hidden = !state.keep?.note;
+  $("#keepNote").textContent = state.keep?.note || "";
+}
+
+/** Ask for the switch to be on or off, then show what the laptop says happened. */
+async function setKeep(on) {
+  try {
+    state.keep = await invoke("keep_set", { on });
+  } catch (error) {
+    state.keep = { ...(state.keep || { registered: false, preference: null, everyHours: 4 }), note: String(error) };
+  }
+  renderKeep();
 }
 
 // ---------------------------------------------------------------- steps two and three
@@ -261,6 +303,8 @@ function renderRunHead() {
 async function startInstall() {
   const ids = state.rows.filter((r) => state.selected.has(r.id) && selectable(r)).map((r) => r.id);
   if (!ids.length) return;
+  // "On by default" is applied here, when the person commits to installing, not on opening the window.
+  if (keepView(state.keep).pending) await setKeep(true);
   state.run = { ids, progress: {}, complete: false };
   $("#runList").replaceChildren(...state.rows.filter((r) => ids.includes(r.id)).map(runRow));
   ids.forEach(updateRunRow);
@@ -309,6 +353,7 @@ setInterval(() => {
 
 async function backToApps() {
   state.run = null;
+  invoke("keep_state").then((keep) => { state.keep = { ...keep, note: state.keep?.note }; renderKeep(); }).catch(() => {});
   state.touched.clear();
   state.selected = new Set(defaultSelection(state.rows));
   renderApps();
@@ -334,6 +379,8 @@ async function boot() {
   $("#finish").onclick = () => appWindow?.close();
   $("#back").onclick = backToApps;
   $("#go").onclick = startInstall;
+  $("#keepSwitch").onchange = (event) => setKeep(event.target.checked);
+  $("#keepNow").onclick = () => setKeep(true);
 
   await tauri.event.listen("setup://progress", onProgress);
   await tauri.event.listen("setup://finished", onFinished);
@@ -348,6 +395,7 @@ async function boot() {
   renderApps();
 
   invoke("laptop_state").then(renderLaptop).catch(() => {});
+  invoke("keep_state").then((keep) => { state.keep = keep; renderKeep(); }).catch(() => {});
 
   // GitHub is asked after the page is drawn, so a laptop with no network is never kept waiting.
   invoke("check_online").then((answer) => {

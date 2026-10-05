@@ -15,7 +15,7 @@
     catalyst: { name: "Catalyst", blurb: "The Catalyst tools in one window, and the library installer for robot projects.", icon: "icons/catalyst.png", default: true, downloadable: true },
     console: { name: "Catalyst Console", blurb: "The driver station dashboard: read-only telemetry, field and robot views.", icon: "icons/console.png", default: true, downloadable: true },
     sim: { name: "Catalyst Sim (MO)", blurb: "Driver practice for Numbers, offline, with the real control map.", icon: "icons/sim.png", default: true, downloadable: false },
-    pit: { name: "Catalyst Pit", blurb: "The pit crew's checklist and robot health between matches.", icon: null, default: true, downloadable: false },
+    pit: { name: "Catalyst Pit", blurb: "Match day in the pit: the pre-match checklist, batteries, the queue and the match log.", icon: "icons/pit.png", default: true, downloadable: true },
     link: { name: "Catalyst Link", blurb: "The Tab5 companion. Optional: only for laptops that pair with a Catalyst Tab.", icon: "icons/link.png", default: false, downloadable: false },
   };
 
@@ -26,7 +26,23 @@
     status, note: null, asked: APPS[id].downloadable, ...extra,
   });
 
-  const NO_DOWNLOAD = "Not in this payload folder, and it has no download yet.";
+  const NO_DOWNLOAD = "GitHub has no release for this app yet.";
+
+  // &keep=on|off (default: never asked)   &last=updated|ds|offline|none   the switch and its last run
+  const LAST = {
+    updated: { time: 1790930400, outcome: "checked", dry: false, updated: [{ name: "Catalyst", from: "2.7.0", to: "2.8.0" }], failed: [], waiting: [{ name: "Catalyst Console", message: "is open, so its update waits for the next run." }], setup: null },
+    current: { time: 1790930400, outcome: "checked", dry: false, updated: [], failed: [], waiting: [], setup: null },
+    ds: { time: 1790930400, outcome: "driver-station", dry: false, updated: [], failed: [], waiting: [], setup: null },
+    offline: { time: 1790930400, outcome: "offline", dry: false, updated: [], failed: [], waiting: [], setup: null },
+  };
+  const keep = {
+    registered: params.get("keep") === "on",
+    installedVersion: params.get("keep") === "on" ? "1.0.0" : null,
+    preference: params.get("keep") === "on" ? true : params.get("keep") === "off" ? false : null,
+    everyHours: 4,
+    lastRun: LAST[params.get("last")] || null,
+    note: null,
+  };
 
   const SCENARIOS = {
     // A laptop out of the box, a full stick, no network.
@@ -127,6 +143,12 @@
           ? { ...r, installed: { version: r.offer.version }, status: "current" } : r));
         setTimeout(() => emit("setup://finished", after), 40 * (steps.length + 2));
       }
+    },
+    keep_state: async () => ({ ...keep }),
+    keep_set: async ({ on }) => {
+      if (run === "dry") return { ...keep, note: on ? "Dry run: nothing was copied and no task was registered." : "Dry run: the task was not removed." };
+      Object.assign(keep, { registered: on, preference: on, installedVersion: on ? "1.0.0" : keep.installedVersion });
+      return { ...keep };
     },
     launch_app: async ({ id }) => console.info("[harness] would open", id),
     open_link: async ({ url }) => console.info("[harness] would open", url),

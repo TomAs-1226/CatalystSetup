@@ -1,0 +1,116 @@
+# For Catalyst Pit: save this as .github/workflows/release.yml in TomAs-1226/CatalystPit.
+# (It lives in Catalyst Setup's docs/ only as a hand-over; nothing here runs it.)
+#
+# Check every push to main, and turn a push that carries a new version number into a release.
+#
+#   push to main, version unchanged   -> the checks run, nothing is published
+#   push to main, version is new      -> the checks run, then v<version> is built and released
+#   run by hand (workflow_dispatch)   -> the same decision, for the commit it is run on
+#
+# "New" means no tag v<version> exists yet, where <version> is src-tauri/tauri.conf.json's. A
+# version means one build: a second build is never published under a version that already exists,
+# so the release job keys on the tag being absent and `gh release create` refuses a tag that is
+# there. To ship a fix, bump the version everywhere it is carried and push.
+#
+# The release carries one file: the Windows NSIS installer, `Catalyst Pit_<version>_x64-setup.exe`.
+# Catalyst Setup finds it as "the asset of the latest v* release whose name ends in -setup.exe",
+# installs it with /S, and auto-updates laptops only when GitHub shows a sha256 digest for it —
+# which it does for every asset uploaded this way. Keep the tag form (v<version>) and the
+# -setup.exe ending, or change suite.json in Catalyst Setup to match.
+#
+# Windows only. No secrets beyond the workflow's own token, nothing signed, no Tauri updater.
+name: Release Catalyst Pit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# Two pushes in a row must not both decide "no tag yet" and race to publish it.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # The gate, on Windows because that is the only platform the app is built for.
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - name: Install
+        run: npm ci
+      # The frontend loads its fonts from src/vendor, which is copied out of node_modules rather
+      # than checked in. Vendor before testing, or the gate fails on a file that was never there —
+      # the way Catalyst Console's v2.0.0 first failed.
+      - name: Vendor the browser dependencies
+        run: npm run vendor
+      # npm test = the identity drift check (passes with no library checkout), node --test, cargo test.
+      - name: Test
+        run: npm test
+
+  # Is this push a release? Read the version and ask whether its tag exists.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      exists: ${{ steps.read.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$version")" ]; then exists=true; else exists=false; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+          echo "v$version: tag exists = $exists" >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    needs: [check, version]
+    if: needs.version.outputs.exists == 'false'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - name: Install
+        run: npm ci
+      - name: Vendor the browser dependencies
+        run: npm run vendor
+
+      # Only the NSIS installer: it is the one file the release carries.
+      - name: Build the installer
+        run: npm run tauri -- build --bundles nsis
+
+      # Exactly one installer for exactly this version, or stop: a stale one left by a cache must
+      # never be published under a new tag.
+      - name: Publish
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(src-tauri/target/release/bundle/nsis/*_"$VERSION"_*-setup.exe)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "expected one installer for $VERSION, found ${#files[@]}" >&2
+            ls -la src-tauri/target/release/bundle/nsis >&2 || true
+            exit 1
+          fi
+          gh release create "v$VERSION" "${files[0]}" \
+            --target "$GITHUB_SHA" \
+            --title "Catalyst Pit v$VERSION" \
+            --notes "Match day in the pit: the pre-match checklist, batteries, the queue and the match log. Windows installer; installs for the signed-in user, no administrator needed. Catalyst Setup installs and updates it from this release."

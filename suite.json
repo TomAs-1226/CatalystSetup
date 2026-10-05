@@ -2,6 +2,17 @@
   "schema": 1,
   "about": "The Catalyst suite: every app Catalyst Setup installs, where each comes from, and how to tell it is installed. This file is the single source of truth: the Rust side embeds it, the frontend is handed it, and scripts/make-bundle.mjs reads it.",
   "uninstallRoot": "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+  "setup": {
+    "about": "Catalyst Setup itself: where its own releases are, where its installed copy lives, and what keeps the apps up to date.",
+    "repo": "TomAs-1226/CatalystSetup",
+    "tagPrefix": "v",
+    "asset": "catalyst-setup.exe",
+    "installFolder": "Catalyst Setup",
+    "uninstallKey": "Catalyst Setup",
+    "task": "Catalyst Setup Auto Update",
+    "everyHours": 4,
+    "driverStationProcesses": ["DriverStation.exe", "FirstDriverStation.exe"]
+  },
   "apps": [
     {
       "id": "catalyst",
@@ -39,10 +50,11 @@
     {
       "id": "pit",
       "name": "Catalyst Pit",
-      "blurb": "The pit crew's checklist and robot health between matches.",
-      "icon": null,
+      "blurb": "Match day in the pit: the pre-match checklist, batteries, the queue and the match log.",
+      "icon": "icons/pit.png",
+      "iconFrom": "../CatalystPit/src-tauri/icons/128x128.png",
       "default": true,
-      "source": { "kind": "payload-only" },
+      "source": { "kind": "github", "repo": "TomAs-1226/CatalystPit", "tagPrefix": "v", "assetSuffix": "-setup.exe" },
       "installer": { "kind": "tauri-nsis", "silentArgs": ["/S"] },
       "detect": { "hive": "HKCU", "key": "Catalyst Pit", "exe": "catalyst-pit.exe" },
       "bundle": { "from": "nsis-dir", "path": "../CatalystPit/src-tauri/target/release/bundle/nsis" }

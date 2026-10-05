@@ -64,3 +64,25 @@ export function sha256File(path) {
     createReadStream(path).on("data", (d) => hash.update(d)).on("error", reject).on("end", () => resolve(hash.digest("hex")));
   });
 }
+
+/**
+ * The text of a release: what the zip holds, and what it could not hold and why. A release must
+ * not let anyone think the stick is complete when it is not.
+ */
+export function releaseNotes(version, items, skipped) {
+  const lines = [
+    `Catalyst Setup ${version}: one installer for every Catalyst app.`,
+    "",
+    "- `catalyst-setup.exe` is the program alone. It downloads what it installs, so it needs a network.",
+    "- `CatalystSuite.zip` is the program with a `payload` folder beside it, for a USB stick. It installs with no network.",
+    "",
+    items.length ? "In the zip's payload:" : "The zip's payload is empty: no app's installer could be fetched when this was built.",
+    ...items.map((i) => `- ${i.name} ${i.version}`),
+  ];
+  if (skipped.length) {
+    lines.push("", "Not in the zip:", ...skipped.map((s) => `- ${s.name}: ${s.why}.`));
+    lines.push("", "For a complete stick, build one on a machine that has those installers: `npm run build`, then `npm run bundle`.");
+  }
+  lines.push("", "Laptops with \"Keep these apps up to date\" turned on move to this version of Catalyst Setup by themselves.", "");
+  return lines.join("\n");
+}

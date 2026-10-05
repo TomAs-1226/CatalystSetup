@@ -10,8 +10,23 @@ pub const SUITE_JSON: &str = include_str!("../../suite.json");
 pub struct Suite {
     pub schema: u32,
     pub uninstall_root: String,
+    pub setup: Setup,
     pub apps: Vec<App>,
     pub laptop: Vec<LaptopItem>,
+}
+
+/// Catalyst Setup's own entry: its releases, its installed copy and its scheduled task.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Setup {
+    pub repo: String,
+    pub tag_prefix: String,
+    pub asset: String,
+    pub install_folder: String,
+    pub uninstall_key: String,
+    pub task: String,
+    pub every_hours: u32,
+    pub driver_station_processes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -108,6 +123,18 @@ mod tests {
         assert_eq!(by("link").detect.exe, "catalyst-link-desktop.exe");
         assert!(!by("link").default, "Link is optional and starts unticked");
         assert!(matches!(by("sim").source, Source::PayloadOnly));
+        assert!(matches!(by("link").source, Source::PayloadOnly));
+        match &by("pit").source {
+            Source::Github { repo, tag_prefix, asset_suffix } => {
+                assert_eq!((repo.as_str(), tag_prefix.as_str(), asset_suffix.as_str()), ("TomAs-1226/CatalystPit", "v", "-setup.exe"));
+            }
+            other => panic!("pit should come from GitHub, not {other:?}"),
+        }
+        assert_eq!(suite.setup.repo, "TomAs-1226/CatalystSetup");
+        assert_eq!(suite.setup.asset, "catalyst-setup.exe");
+        assert_eq!(suite.setup.uninstall_key, "Catalyst Setup");
+        assert!(suite.setup.driver_station_processes.iter().any(|p| p == "DriverStation.exe"));
+        assert!((1..=23).contains(&suite.setup.every_hours), "schtasks takes 1 to 23 hours");
         match &by("catalyst").source {
             Source::Github { repo, tag_prefix, .. } => {
                 assert_eq!(repo, "TomAs-1226/CatalystApp");

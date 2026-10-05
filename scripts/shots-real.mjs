@@ -85,9 +85,11 @@ try {
   await until(`document.querySelectorAll('#appList .row').length > 0`, "the app list");
   await until(`document.querySelector('#srcGithub').textContent !== 'asking'`, "GitHub's answer", 60000);
   await until(`document.querySelectorAll('#laptopList .laptop__item').length > 0`, "the laptop check");
+  await until(`!document.querySelector('#keepSwitch').disabled`, "the keep-up-to-date state");
   await shot("1-apps");
   log.push("== apps ==", await js(READ), "", "lede: " + await js(`document.querySelector('#sourceLine').textContent`),
     "sources: payload=" + await js(`document.querySelector('#srcPayload').textContent`) + " github=" + await js(`document.querySelector('#srcGithub').textContent`),
+    "keep: " + await js(`[document.querySelector('#keepSwitch').checked ? '[on]' : '[off]', document.querySelector('#keepLine').textContent, document.querySelector('#keepLast').hidden ? '' : document.querySelector('#keepLast').textContent].join(' ')`),
     "laptop: " + await js(`[...document.querySelectorAll('.laptop__item')].map(i => i.innerText.replace(/\\n+/g,' / ')).join(' ; ')`), "");
 
   if (!flag("--no-install")) {
@@ -104,6 +106,12 @@ try {
       await until(`!document.querySelector('#runActions').hidden`, "the install to finish", 600000);
       await shot("3-done");
       log.push("== done ==", "title: " + await js(`document.querySelector('#runTitle').textContent`), await js(READ), "");
+      // Back on the apps page, the switch shows what pressing Install did to it (in a dry run: nothing, and it says so).
+      await js(`document.querySelector('#back').click()`);
+      await until(`!document.querySelector('#viewApps').hidden`, "the apps page");
+      await js(`document.querySelector('.col-main').scrollTop = 99999`);
+      await shot("4-keep");
+      log.push("keep after: " + await js(`[document.querySelector('#keepLine').textContent, document.querySelector('#keepNote').textContent].join(' | ')`));
     }
   }
 } finally {

@@ -1,0 +1,115 @@
+# Check every push to main, and turn a push that carries a new version number into a release.
+#
+#   push to main, version unchanged   -> the checks run, nothing is published
+#   push to main, version is new      -> the checks run, then v<version> is built and released
+#   run by hand (workflow_dispatch)   -> the same decision, for the commit it is run on
+#
+# "New" means no tag v<version> exists yet, where <version> is src-tauri/tauri.conf.json's. The
+# house rule is that a version means one build: a second build is never published under a version
+# that already exists. So the release job keys on the tag being absent, `gh release create` refuses
+# a tag that is there, and nothing here ever replaces a published file. To ship a fix, bump the version
+# in package.json, package-lock.json, src-tauri/tauri.conf.json and src-tauri/Cargo.toml (the test
+# run fails while they disagree) and push.
+#
+# What a release carries:
+#   catalyst-setup.exe   the portable program. Installed copies of Catalyst Setup update
+#                        themselves from this asset by this exact name; do not rename it.
+#   CatalystSuite.zip    the program plus a payload folder, for a USB stick. CI can fetch only the
+#                        apps that have GitHub releases (Catalyst, Console, Pit once it has one).
+#                        The Sim's installer is built on the owner's machine and has no release,
+#                        so it is not in this zip, and the release notes say so.
+#
+# No secrets beyond the workflow's own token. Nothing is signed, and there is no Tauri updater
+# plugin: the self-update is Catalyst Setup's own, held to the sha256 GitHub publishes per asset.
+name: Release Catalyst Setup
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# Two pushes in a row must not both decide "no tag yet" and race to publish it.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # The gate. It runs on Windows because the Rust tests are Windows tests: they read the registry
+  # through winreg, run a stub installer, and ask tasklist what is running.
+  #
+  # Unlike Catalyst Console's gate there is nothing to vendor first: this frontend imports no
+  # packages. And check-identity passes here by design — there is no FrcCatalyst checkout on a
+  # runner, and it says so and exits 0 rather than failing a check nobody could act on.
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - name: Install
+        run: npm ci
+      # npm test = the identity drift check, node --test, then cargo test.
+      - name: Test
+        run: npm test
+
+  # Is this push a release? Read the version and ask whether its tag exists.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      exists: ${{ steps.read.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$version")" ]; then exists=true; else exists=false; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+          echo "v$version: tag exists = $exists" >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    needs: [check, version]
+    if: needs.version.outputs.exists == 'false'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - name: Install
+        run: npm ci
+
+      # tauri build --no-bundle: the product is the exe itself, not an installer for it.
+      - name: Build the portable exe
+        run: npm run build
+
+      # Fetches what has a release, skips what does not, and writes dist/release-notes.md saying
+      # which is which. It uses gh, which reads GH_TOKEN.
+      - name: Assemble the suite zip
+        run: node scripts/make-bundle.mjs
+
+      # Fails, on purpose, if the tag appeared since the version job looked.
+      - name: Publish
+        shell: bash
+        run: >
+          gh release create "v$VERSION"
+          src-tauri/target/release/catalyst-setup.exe
+          dist/CatalystSuite.zip
+          --target "$GITHUB_SHA"
+          --title "Catalyst Setup v$VERSION"
+          --notes-file dist/release-notes.md

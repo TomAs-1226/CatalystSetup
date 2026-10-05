@@ -4,9 +4,11 @@
 // is not in suite.json. The window only ever shows what one of the modules below measured.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod auto;
 mod detect;
 mod github;
 mod install;
+mod keep;
 mod manifest;
 mod suite;
 mod version;
@@ -256,6 +258,11 @@ fn start_install(app: AppHandle, ctx: State<Ctx>, ids: Vec<String>) -> Result<()
     if ctx.busy.swap(true, Atomic::SeqCst) {
         return Err("An install is already running.".into());
     }
+    // The same lock the headless run takes, so the two never change the laptop at once.
+    let Some(lock) = auto::Lock::acquire(&auto::work_dir()) else {
+        ctx.busy.store(false, Atomic::SeqCst);
+        return Err("The background update is running right now. Try again in a minute.".into());
+    };
     let payload = manifest::load(&ctx.payload_dir);
     let mut jobs = Vec::new();
     let mut refused = Vec::new();
@@ -294,7 +301,7 @@ fn start_install(app: AppHandle, ctx: State<Ctx>, ids: Vec<String>) -> Result<()
         let detect = |id: &str| ctx.suite.apps.iter().find(|a| a.id == id).and_then(|a| detect_one(&ctx.suite, a));
         let machine = Machine {
             dry_run: ctx.dry_run,
-            download_dir: std::env::temp_dir().join("CatalystSetup"),
+            download_dir: auto::work_dir(),
             is_running: &install::is_running,
             detect: &detect,
             agent: &github::agent,
@@ -302,6 +309,7 @@ fn start_install(app: AppHandle, ctx: State<Ctx>, ids: Vec<String>) -> Result<()
         for job in &jobs {
             install::run_job(job, &machine, &emit);
         }
+        drop(lock);
         ctx.busy.store(false, Atomic::SeqCst);
         let _ = app.emit("setup://finished", rows(&ctx));
     });
@@ -332,6 +340,19 @@ fn open_link(ctx: State<Ctx>, url: String) -> Result<(), String> {
         .map_err(|e| format!("The browser could not be opened: {e}"))
 }
 
+/// The keep-up-to-date switch as it really is: whether the task exists, and what its last run did.
+#[tauri::command]
+fn keep_state(ctx: State<Ctx>) -> keep::KeepState {
+    keep::state(&ctx.suite)
+}
+
+/// Turn it on (copy this exe, add the Apps entry, register the task) or off (remove the task).
+/// Answers with the state as it is afterwards, and a note when the change did not happen.
+#[tauri::command]
+fn keep_set(ctx: State<Ctx>, on: bool) -> keep::KeepState {
+    keep::set(&ctx.suite, on, ctx.dry_run)
+}
+
 fn payload_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("CATALYST_SETUP_PAYLOAD") {
         return PathBuf::from(dir);
@@ -343,8 +364,15 @@ fn payload_dir() -> PathBuf {
 }
 
 fn main() {
-    let dry_run = std::env::args().any(|a| a == "--dry-run")
-        || std::env::var("CATALYST_SETUP_DRY_RUN").is_ok_and(|v| v == "1");
+    let has = |flag: &str| std::env::args().any(|a| a == flag);
+    let dry_run = has("--dry-run") || std::env::var("CATALYST_SETUP_DRY_RUN").is_ok_and(|v| v == "1");
+    // The two headless modes never build a window.
+    if has("--auto") {
+        std::process::exit(keep::run_auto(&suite::load(), dry_run));
+    }
+    if has("--uninstall") {
+        std::process::exit(keep::uninstall(&suite::load()));
+    }
     tauri::Builder::default()
         .manage(Ctx {
             suite: suite::load(),
@@ -359,7 +387,9 @@ fn main() {
             laptop_state,
             start_install,
             launch_app,
-            open_link
+            open_link,
+            keep_state,
+            keep_set
         ])
         .run(tauri::generate_context!())
         .expect("error while running Catalyst Setup");

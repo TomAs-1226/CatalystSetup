@@ -12,6 +12,7 @@
     "dev": "tauri dev",
     "build": "node scripts/check-identity.mjs && tauri build --no-bundle",
     "bundle": "node scripts/make-bundle.mjs",
+    "icons": "node scripts/sync-icons.mjs",
     "identity": "node scripts/check-identity.mjs --write",
     "check-identity": "node scripts/check-identity.mjs",
     "icon": "node scripts/make-icon.mjs",
