@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>Catalyst Setup</title>
+  <!-- identity.css is a copy of the library's house stylesheet (scripts/check-identity.mjs holds
+       it to the original). setup.css is only this window's layout, on those tokens. -->
+  <link rel="stylesheet" href="styles/identity.css" />
+  <link rel="stylesheet" href="styles/setup.css" />
+</head>
+<body>
+  <header id="titlebar" data-tauri-drag-region>
+    <div class="tb-mark" id="tbMark" aria-hidden="true"></div>
+    <span class="tb-title cat-wordmark" data-tauri-drag-region>
+      <span class="cat-wordmark__name">Catalyst</span> <span class="cat-wordmark__prefix">Setup</span>
+    </span>
+    <span class="tb-version" id="tbVersion" data-tauri-drag-region></span>
+    <ol class="tb-steps" id="tbSteps" aria-label="Steps" data-tauri-drag-region>
+      <li data-step="apps" aria-current="step">apps</li>
+      <li data-step="install">install</li>
+      <li data-step="done">done</li>
+    </ol>
+    <div class="tb-spacer" data-tauri-drag-region></div>
+    <span class="cat-chip cat-chip--warn tb-dry" id="dryChip" title="Started with --dry-run: files are checked and downloaded, installers are not run." hidden>dry run</span>
+    <div class="tb-controls">
+      <button class="tb-btn" id="tbMin" title="Minimize" aria-label="Minimize"></button>
+      <button class="tb-btn close" id="tbClose" title="Close" aria-label="Close"></button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <div class="col-main">
+      <!-- Step one: what is here, what is on offer, what to install. -->
+      <section class="view" id="viewApps" aria-labelledby="appsTitle">
+        <header class="page-head">
+          <div class="page-head__text">
+            <p class="cat-eyebrow">CATALYST SUITE</p>
+            <h1 id="appsTitle">Set up this laptop</h1>
+            <p class="lede" id="sourceLine"></p>
+          </div>
+          <button class="cat-btn cat-btn--loud" id="go" disabled></button>
+        </header>
+        <div class="list cat-card" id="appList" role="group" aria-label="Apps"></div>
+      </section>
+
+      <!-- Steps two and three are one list: it installs, then it is the result. -->
+      <section class="view" id="viewRun" aria-labelledby="runTitle" hidden>
+        <header class="page-head">
+          <div class="page-head__text">
+            <p class="cat-eyebrow" id="runEyebrow">INSTALLING</p>
+            <h1 id="runTitle">Installing</h1>
+            <p class="lede" id="runLine"></p>
+          </div>
+          <div class="page-head__actions" id="runActions" hidden>
+            <button class="cat-btn cat-btn--ghost" id="back">Back to apps</button>
+            <button class="cat-btn" id="finish">Close</button>
+          </div>
+        </header>
+        <div class="list cat-card" id="runList" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <aside class="col-side" aria-label="This laptop">
+      <section class="cat-card side-card">
+        <p class="cat-eyebrow">THIS LAPTOP</p>
+        <div id="laptopList" class="laptop"></div>
+        <p class="side-note">Checked only. Setup never downloads or installs these.</p>
+      </section>
+      <section class="cat-card side-card">
+        <p class="cat-eyebrow">SOURCES</p>
+        <div class="cat-kv"><span class="cat-kv__key">Payload folder</span><span class="cat-kv__value" id="srcPayload"></span></div>
+        <div class="cat-kv cat-kv--last"><span class="cat-kv__key">GitHub</span><span class="cat-kv__value" id="srcGithub"></span></div>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
