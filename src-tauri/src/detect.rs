@@ -116,6 +116,16 @@ pub fn is_game_tools(name: &str) -> bool {
         || n.starts_with("ni first robotics")
 }
 
+/// The season in a product name: "… 2026 Driver Station" is 2026, "… 2027.0.0-alpha-6" is 2027.
+pub fn season(name: &str) -> u32 {
+    name.split(|c: char| !c.is_ascii_digit())
+        .filter(|part| part.len() == 4)
+        .filter_map(|part| part.parse::<u32>().ok())
+        .filter(|year| (2000..2100).contains(year))
+        .max()
+        .unwrap_or(0)
+}
+
 fn webview2_version(registry: &dyn Registry) -> Option<String> {
     let places = [
         (Hive::LocalMachine, format!("SOFTWARE\\WOW6432Node\\{WEBVIEW2_CLIENT}")),
@@ -133,7 +143,8 @@ fn webview2_version(registry: &dyn Registry) -> Option<String> {
 fn describe(name: &str, version: &Option<String>) -> String {
     match version.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
         // "FIRST Driver Station 2027.0.0-alpha-6" already says its version.
-        Some(v) if !name.contains(v) => format!("{name} · {v}"),
+        // (Windows pads it to 2027.0.0.0; compare without the padding.)
+        Some(v) if !name.contains(crate::version::display(v).as_str()) => format!("{name} · {v}"),
         _ => name.to_string(),
     }
 }
@@ -153,7 +164,7 @@ pub fn detect_laptop(
                     .iter()
                     .filter(|(name, _)| is_driver_station(name))
                     // Newest season first when a laptop carries two.
-                    .max_by(|a, b| a.0.cmp(&b.0))
+                    .max_by_key(|(name, _)| season(name))
                     .map(|(name, version)| describe(name, version))
                     .or_else(|| {
                         ds_paths.iter().find(|p| exists(p)).map(|p| p.to_string_lossy().into_owned())
@@ -363,9 +374,19 @@ pub mod tests {
             .set(Hive::LocalMachine, &format!("{root}\\NI Package Manager"), "DisplayName", "NI Package Manager");
         let found = detect_laptop(&reg, &laptop_items(), &[], &|_| false);
         let by = |id: &str| found.iter().find(|f| f.id == id).unwrap();
-        assert!(by("driver-station").detail.as_deref().unwrap().starts_with("FIRST Driver Station 2027.0.0-alpha-6"));
+        assert_eq!(by("driver-station").detail.as_deref(), Some("FIRST Driver Station 2027.0.0-alpha-6"));
         assert!(!by("game-tools").found);
         assert!(!by("webview2").found);
+    }
+
+    #[test]
+    fn two_driver_stations_show_the_newer_season() {
+        let mut reg = FakeRegistry::default();
+        reg.set(Hive::LocalMachine, &format!("{}\\ni", UNINSTALL_ROOTS[1]), "DisplayName", "NI FIRST Robotics Competition 2026 Driver Station")
+            .set(Hive::LocalMachine, &format!("{}\\first", UNINSTALL_ROOTS[0]), "DisplayName", "FIRST Driver Station 2027.0.0-alpha-6");
+        let found = detect_laptop(&reg, &laptop_items(), &[], &|_| false);
+        assert_eq!(found[0].detail.as_deref(), Some("FIRST Driver Station 2027.0.0-alpha-6"));
+        assert_eq!(season("NI FIRST Robotics Utilities"), 0);
     }
 
     #[test]

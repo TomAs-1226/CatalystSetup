@@ -117,7 +117,7 @@ pub fn run_job(job: &Job, machine: &Machine, emit: &dyn Fn(Progress)) {
     emit(step("installing", 0, None));
     if machine.dry_run {
         let command = format!("{} {}", installer.display(), job.silent_args.join(" "));
-        emit(Progress { message: Some(format!("Dry run. Would have run: {command}")), ..step("done", 0, None) });
+        emit(Progress { message: Some(format!("Would have run: {command}")), ..step("done", 0, None) });
         return;
     }
 
@@ -315,7 +315,7 @@ mod tests {
         let events = run(&job(&path, &sha, size, &["/C", "echo", &touch]), true, false, None);
         assert_eq!(phases(&events), ["verifying", "installing", "done"]);
         let done = events.last().unwrap();
-        assert!(done.dry && done.message.as_deref().unwrap().starts_with("Dry run. Would have run:"));
+        assert!(done.dry && done.message.as_deref().unwrap().starts_with("Would have run:"));
         assert!(!marker.exists(), "a dry run must not start the installer");
 
         // The same job for real does run it, which proves the marker would have appeared.

@@ -106,7 +106,7 @@
       } else if (run === "failed" && id === "sim") {
         steps.push({ ...base, phase: "failed", message: "Catalyst_Sim_1.4.0-setup.exe is damaged: its sha256 is not the one recorded for it. Nothing was installed from it." });
       } else if (dry) {
-        steps.push({ ...base, phase: "done", message: `Dry run. Would have run: E:\\CatalystSuite\\payload\\${app.name.replace(/\W+/g, "_")}_${app.offer.version}_x64-setup.exe ${id === "sim" ? "/silent" : "/S"}` });
+        steps.push({ ...base, phase: "done", message: `Would have run: E:\\CatalystSuite\\payload\\${app.name.replace(/\W+/g, "_")}_${app.offer.version}_x64-setup.exe ${id === "sim" ? "/silent" : "/S"}` });
       } else {
         steps.push({ ...base, phase: "done" });
       }

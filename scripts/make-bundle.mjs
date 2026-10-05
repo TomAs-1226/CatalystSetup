@@ -138,9 +138,11 @@ if (strays.length) console.log(`  note      payload/ also holds ${strays.join(",
 
 if (!args.has("--no-zip")) {
   const zip = join(root, "dist", "CatalystSuite.zip");
-  // tar ships with Windows 10 and later and writes a real zip with -a; no PowerShell, no module.
+  // The tar that ships with Windows (bsdtar) writes a real zip with -a. Named by its full path:
+  // under Git Bash a bare `tar` is GNU tar, which reads "C:" as a remote host and writes no zips.
+  const tar = join(process.env.SystemRoot || "C:\Windows", "System32", "tar.exe");
   const files = ["Catalyst Setup.exe", "README.txt", "payload/manifest.json", ...items.map((i) => `payload/${i.file}`)];
-  execFileSync("tar", ["-a", "-c", "-f", zip, "-C", out, ...files], { stdio: "inherit" });
+  execFileSync(tar, ["-a", "-c", "-f", zip, "-C", out, ...files], { stdio: "inherit" });
   console.log(`make-bundle: ${zip}  (${(statSync(zip).size / 1048576).toFixed(1)} MB)`);
 }
 console.log(`make-bundle: ${items.length} of ${suite.apps.length} apps in the payload${skipped.length ? `; skipped ${skipped.join(", ")}` : ""}`);
