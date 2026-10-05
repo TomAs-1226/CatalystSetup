@@ -1,0 +1,13 @@
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+dist/
+# Screenshots are evidence of a run, not source. `npm run shots` remakes them.
+shots/
+# tauri icon also cuts mobile and store sizes this app never ships.
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/Square*.png
+src-tauri/icons/StoreLogo.png
+src-tauri/icons/icon.icns
+src-tauri/icons/64x64.png

@@ -1,0 +1,25 @@
+{
+  "name": "catalyst-setup",
+  "version": "1.0.0",
+  "description": "One installer for every Catalyst app (Tauri, portable)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/check-identity.mjs && node --test \"src/**/*.test.js\" \"scripts/**/*.test.mjs\" && cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:js": "node --test \"src/**/*.test.js\" \"scripts/**/*.test.mjs\"",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "node scripts/check-identity.mjs && tauri build --no-bundle",
+    "bundle": "node scripts/make-bundle.mjs",
+    "identity": "node scripts/check-identity.mjs --write",
+    "check-identity": "node scripts/check-identity.mjs",
+    "icon": "node scripts/make-icon.mjs",
+    "harness": "node scripts/harness.mjs",
+    "shots": "node scripts/shots.mjs",
+    "shots:real": "node scripts/shots-real.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

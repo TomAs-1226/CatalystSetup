@@ -1,0 +1,28 @@
+[package]
+name = "catalyst-setup"
+version = "1.0.0"
+description = "One installer for every Catalyst app"
+authors = ["TomAs-1226"]
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+# Schannel through native-tls: the laptop's own certificate store and no C toolchain in the build.
+ureq = { version = "2", default-features = false, features = ["native-tls", "json"] }
+native-tls = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1
